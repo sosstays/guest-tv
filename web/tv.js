@@ -56,6 +56,7 @@
     pool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2.5 16c1.6 0 1.6-1.2 3.2-1.2s1.6 1.2 3.2 1.2 1.6-1.2 3.1-1.2 1.6 1.2 3.2 1.2 1.6-1.2 3.2-1.2 1.6 1.2 3.1 1.2"/><path d="M2.5 20c1.6 0 1.6-1.2 3.2-1.2s1.6 1.2 3.2 1.2 1.6-1.2 3.1-1.2 1.6 1.2 3.2 1.2 1.6-1.2 3.2-1.2 1.6 1.2 3.1 1.2"/><path d="M8 13V5.5a2 2 0 0 1 4 0M16 13V5.5a2 2 0 0 0-4 0M8 8.5h8"/></svg>',
     music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
     light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></svg>',
     notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>'
   };
   function wx(code, day) {
@@ -136,6 +137,10 @@
       eyebrow = S.host ? "Staying with " + S.host : S.name;
       h1 = guest ? greeting() + ", " + guest : "Welcome";
       sub = st.to ? "Here until " + DAYS[d8(st.to).getDay()] + ". Make yourself at home." : "Make yourself at home.";
+    } else if (st.phase === "open") {
+      eyebrow = S.kind || (S.brand && S.brand.name) || "";
+      h1 = guest ? "Welcome, " + guest : "Welcome to " + S.name;
+      sub = "Make yourself at home." + (S.checkout_time ? " Check-out is by " + t12(S.checkout_time) + "." : "");
     } else if (st.phase === "between" || st.phase === "before") {
       eyebrow = S.kind;
       h1 = "Welcome to " + S.name;
@@ -151,6 +156,9 @@
       sub = dayShort(st.from) + " to " + dayShort(st.to) + " · Night " + st.night + " of " + st.nights;
     }
     $("eyebrow").textContent = eyebrow || "";
+    var logo = $("brand"), src = S.brand && S.brand.logo;
+    if (src && logo.getAttribute("src") !== src) { logo.alt = S.brand.name || ""; logo.src = src; }
+    logo.style.display = src ? "" : "none";
     $("welcome").textContent = h1;
     $("sub").textContent = sub;
     document.body.classList.toggle("between", S.mode !== "guest" && !st.active);
@@ -204,7 +212,7 @@
     } };
     var wifiCard = { id: "wifi", w: 1.7, html: function () {
       return '<div class="k">' + I.wifi + "Wi-Fi</div>" + (S.wifi && S.wifi.ssid ?
-        '<div><div class="small">' + esc(S.wifi.ssid) + '</div><div class="pw">' + esc(S.wifi.password) + '</div><div class="small">OK for a code to join</div></div>'
+        '<div><div class="small">' + esc(S.wifi.ssid) + '</div><div class="pw">' + esc(S.wifi.password || "No password") + '</div><div class="small">OK for a code to join</div></div>'
         : '<div class="small">Ask ' + esc(S.host || "your host") + " for the Wi-Fi</div>");
     } };
     var climateCard = { id: "climate", w: S.mode === "guest" ? 1.8 : 1.4, html: function () {
@@ -228,10 +236,11 @@
     } };
     var checkoutCard = { id: "checkout", w: 1, html: function () {
       return '<div class="k">' + I.checkout + "Check-out</div><div><div class=\"mid\">" + (st.phase === "lastday" ? "Today " : DAYS[d8(st.to).getDay()].slice(0, 3) + " ") + t12(S.checkout_time) +
-        '</div><div class="small">' + ((S.checkout.steps || []).length) + " quick things</div></div>";
+        '</div><div class="small">' + ((S.checkout.steps || []).length ? (S.checkout.steps || []).length + " quick things" : "Thanks for staying") + "</div></div>";
     } };
     var weatherCard = { id: "weather", w: 1.8, html: function () {
-      return '<div class="k">' + I.weather + "Weather</div>" + fcHtml(forecastDays(null, null, 4));
+      var fd = forecastDays(null, null, 4);
+      return '<div class="k">' + I.weather + "Weather</div>" + (fd.length ? fcHtml(fd) : '<div class="small">The forecast shows here when it loads</div>');
     } };
     var eat = S.local.filter(function (c) { return /^eat/i.test(c.category); })[0] || S.local[0];
     var todo = S.local.filter(function (c) { return /things to do|do\b/i.test(c.category); })[0] || S.local[1];
@@ -244,28 +253,37 @@
         '<div class="small">' + places + " local picks</div></div>";
     } };
     var welcomeCard = { id: "about", w: 2, html: function () {
-      return '<div class="k">' + I.stay + esc(S.name) + '</div><div class="small" style="font-size:1.625rem;line-height:2.25rem;color:#fff">' + esc(S.welcome) + "</div>";
+      return '<div class="k">' + I.stay + esc(S.name) + '</div><div class="small clamp" style="font-size:1.625rem;line-height:2.25rem;color:#fff">' + esc(S.welcome) + "</div>";
     } };
 
     var pills = [{ id: "guide", name: S.mode === "guest" ? "How things work" : "House guide", icon: I.guide, note: g ? g + "" : "" }];
     var localPill = { id: "local", name: "Around here", icon: I.local, note: places ? places + "" : "" };
+    var noAC = !S.has_climate && !hasHub;   // no aircon here: the house guide takes that tile
+    if (noAC) { guideCard.w = 1.2; }
     if (S.mode === "guest") {
-      out = places ? [climateCard, wifiCard, weatherCard, localCard] : [climateCard, wifiCard, weatherCard];
+      out = (noAC ? [] : [climateCard]).concat(places ? [wifiCard, weatherCard, localCard] : [wifiCard, weatherCard]);
       climateCard.w = 1.45; wifiCard.w = 1.5; weatherCard.w = 1.55;
+    } else if (st.phase === "open") {
+      wifiCard.w = 1.5; weatherCard.w = 1.6;
+      out = [welcomeCard, wifiCard, noAC ? weatherCard : climateCard].concat(places ? [localCard] : []);
+      if (S.checkout_time) pills.push({ id: "checkout", name: "Check-out", icon: I.checkout, note: t12(S.checkout_time) });
     } else if (!st.active) {
       out = places ? [welcomeCard, weatherCard, localCard] : [welcomeCard, weatherCard];
     } else if (st.phase === "lastday") {
       checkoutCard.lead = true; checkoutCard.w = 1.3;
       if (hasHub) { climateCard = hubCard; }
+      if (noAC) { climateCard = guideCard; }
       out = [checkoutCard, stayCard, wifiCard, climateCard];
       stayCard.w = 2; climateCard.w = hasHub ? 1.6 : 1.2;
       if (places) pills.push(localPill);
     } else {
       stayCard.w = 2; wifiCard.w = 1.45; climateCard.w = 1.2;
       if (hasHub) { climateCard = hubCard; climateCard.w = 1.75; stayCard.w = 1.9; wifiCard.w = 1.35; }
+      if (noAC) { climateCard = guideCard; }
       out = places ? [stayCard, wifiCard, climateCard, localCard] : [stayCard, wifiCard, climateCard];
       pills.push({ id: "checkout", name: "Check-out", icon: I.checkout, note: DAYS[d8(st.to).getDay()].slice(0, 3) + " " + t12(S.checkout_time) });
     }
+    if (S.video && S.video.url) pills.push({ id: "video", name: "Welcome video", icon: I.play, note: "" });
     PILLS = pills;
     return out;
   }
@@ -308,7 +326,7 @@
           .slice(0, 6).map(function (a) { return { name: a.label, pkg: a.package, banner: "http://tvos.invalid/banner/" + a.package }; });
       } catch (e) { list = []; }
     } else {
-      list = ["Netflix", "YouTube", "Prime Video", "Disney+", "ABC iview", "Spotify"].map(function (n) { return { name: n }; });
+      list = ["Netflix", "YouTube", "Prime Video", "Disney+", "Spotify"].map(function (n) { return { name: n }; });
     }
     APPS = PILLS.map(function (p) { return { name: p.name, sheet: p.id, icon: p.icon, note: p.note }; }).concat(list);
     var box = $("apps");
@@ -344,6 +362,7 @@
   }
   function launch(a) {
     if (!a) return;
+    if (a.sheet === "video") { playVideo(true); return; }
     if (a.sheet) { openSheet(a.sheet); return; }
     if (TVOS && TVOS.launch && a.pkg) { TVOS.launch(a.pkg); return; }
     if (BRAND && a.app) {
@@ -368,7 +387,12 @@
       var out = [];
       if ((S.notes || []).length) { out.push({ group: "From " + (S.host || "your host") }); S.notes.forEach(function (x) { out.push({ t: x.title, body: x.body }); }); }
       if (S.rules.length) { out.push({ group: "House rules" }); S.rules.forEach(function (x) { out.push({ t: x.title, body: x.body }); }); }
-      if (S.howto.length) { out.push({ group: "How things work" }); S.howto.forEach(function (x) { out.push({ t: x.title, body: x.body }); }); }
+      var grp = null;
+      S.howto.forEach(function (x) {
+        var g2 = x.group || "How things work";
+        if (g2 !== grp) { grp = g2; out.push({ group: g2 }); }
+        out.push({ t: x.title, body: x.body });
+      });
       return out;
     }
     if (id === "hub") {
@@ -427,6 +451,7 @@
     navEl.scrollTop = fo ? Math.max(0, fo.offsetTop - navEl.offsetTop - navEl.clientHeight / 2 + fo.offsetHeight / 2) : 0;
     $("sheet-main").innerHTML = sheetMain();
     $("sheet-main").classList.toggle("mid", sh.id === "climate" || sh.id === "wifi" || sh.id === "checkout");
+    $("sheet").classList.toggle("wide-nav", sh.id === "guide");   // questions from the Concierge need the room
     var q = $("sheet-main").querySelectorAll("[data-qr]");
     for (var k = 0; k < q.length; k++) loadSvg(q[k], q[k].getAttribute("data-qr"));
     if (sh.id === "hub") { $("sheet-hint").innerHTML = hubHint(); return; }
@@ -451,16 +476,17 @@
     if (sh.id === "wifi") {
       if (!S.wifi || !S.wifi.ssid) return '<div class="panel glass"><p class="lede">Ask ' + esc(S.host || "your host") + " for the Wi-Fi details.</p></div>";
       return '<div class="panel glass wifi-big"><div class="qr" data-qr="wifi"></div><div><div class="name">Network</div><div class="val">' + esc(S.wifi.ssid) +
-        '</div><div class="name">Password</div><div class="val">' + esc(S.wifi.password) + "</div></div></div>" +
+        '</div><div class="name">Password</div><div class="val">' + esc(S.wifi.password || "None needed") + "</div></div></div>" +
         '<div class="panel glass" style="display:flex;gap:2rem;align-items:center"><div class="qr" data-qr="qr" style="width:9rem;height:9rem;border-radius:1rem;overflow:hidden;background:#fff;flex:none"></div>' +
-        '<div><h3>On your phone too</h3><p>Once you are on the Wi-Fi, this code opens the house guide, climate and local tips on your phone. Nothing to install.</p></div></div>';
+        '<div><h3>On your phone too</h3><p>Once you are on the Wi-Fi, this code opens the house guide and local tips on your phone. Nothing to install.</p></div></div>';
     }
     if (sh.id === "climate") return zonesHtml();
     if (sh.id === "hub") return hubMain();
     if (sh.id === "checkout") {
       var steps = (S.checkout.steps || []).map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("");
-      return '<div class="panel glass"><p class="meta">' + (st.phase === "lastday" ? "Today" : st.to ? DAYS[d8(st.to).getDay()] : "") + '</p><h3>Check-out by ' + t12(S.checkout_time) + "</h3><ol>" + steps + "</ol></div>" +
-        '<div class="panel glass"><p class="lede">Safe travels' + (st.guest ? ", " + esc(st.guest) : "") + ". We hope you come back." + (S.host ? " " + esc(S.host) : "") + "</p></div>";
+      var day = st.phase === "lastday" ? "Today" : st.to ? DAYS[d8(st.to).getDay()] : "";
+      return '<div class="panel glass">' + (day ? '<p class="meta">' + day + "</p>" : "") + '<h3>Check-out by ' + t12(S.checkout_time) + "</h3>" + (steps ? "<ol>" + steps + "</ol>" : "") + "</div>" +
+        '<div class="panel glass"><p class="lede">Safe travels' + (st.guest ? ", " + esc(st.guest) : "") + ". We hope you come back." + "</p>" + (S.host ? '<p class="meta">' + esc(S.host) + "</p>" : "") + "</div>";
     }
     if (sh.id === "weather") {
       return '<div class="panel glass"><h3>' + esc(WX && WX.place || "") + '</h3><p class="meta">The next few days</p>' + fcHtml(forecastDays(null, null, 7), true) + "</div>";
@@ -475,7 +501,7 @@
         }).join("") + "</div></div>";
       }
       return (sh.sel === 0 ? photo("area", "Around " + S.name) : "") + '<div class="panel glass places">' + n.items.map(function (p) {
-        return '<div class="pl"><b>' + esc(p.name) + "</b><p>" + esc(p.note || "") + (p.distance ? " <em>" + esc(p.distance) + "</em>" : "") + "</p></div>";
+        return '<div class="pl"><b>' + esc(p.name) + "</b><p>" + esc(p.note || "") + (p.distance ? " <em>" + esc(p.distance) + "</em>" : "") + (p.phone ? " <em>" + esc(p.phone) + "</em>" : "") + "</p></div>";
       }).join("") + "</div>";
     }
     if (sh.id === "stay" || sh.id === "about") {
@@ -631,9 +657,10 @@
     return was;
   }
   // the couch-tv TV app keeps BACK for itself and calls tv.back() instead
-  window.tv = { back: function () { if (awake()) return; if (sheet) closeSheet(); } };
+  window.tv = { back: function () { if (VID) { stopVideo(); return; } if (awake()) return; if (sheet) closeSheet(); } };
   function onKey(k) {
     document.body.classList.remove("mouse");
+    if (VID) { videoKey(k); return; }
     if (awake()) return;   // the first press only wakes the screen
     if (sheet) sheetKey(k);
     else if (k !== "back") homeKey(k);
@@ -655,6 +682,7 @@
   document.addEventListener("click", function (e) {
     var t = e.target.closest ? e.target : null;
     if (!t) return;
+    if (VID) { videoKey("ok"); return; }
     var card = t.closest("[data-i]"), app = t.closest("[data-a]"), nav = t.closest("[data-n]"), zone = t.closest("[data-z]");
     if (sheet && !t.closest(".sheet-in")) { closeSheet(); return; }
     if (card && !sheet) { area = "cards"; idx = +card.getAttribute("data-i"); paintFocus(); openSheet(CARDS[idx].id); }
@@ -667,21 +695,83 @@
     if (sheet && sheet.id === "climate") { e.preventDefault(); sheetKey(e.deltaY < 0 ? "up" : "down"); }
   }, { passive: false });
 
+  // ---------------------------------------------------------------- welcome video
+  // S.video = {url, id, sound, every}: the host's default video for this home, or one made for this
+  // guest. It plays full screen over the home. OK or Back closes it. "every" says when it starts by
+  // itself: "day" (once a day on this TV), "always" (each time the page loads) or "never".
+  var VID = null;   // {el, box, quiet}: quiet when the TV would not start it with sound
+  function videoSeen(set) {
+    var key = "guest-tv-video", val = S.video.id + "|" + isoToday();
+    try {
+      if (set) localStorage.setItem(key, val);
+      return localStorage.getItem(key) === val;
+    } catch (e) { return false; }
+  }
+  function playVideo(asked) {
+    if (VID || !S || !S.video || !S.video.url) return;
+    var box = document.createElement("div"); box.className = "vid";
+    var v = document.createElement("video");
+    v.src = S.video.url; v.setAttribute("playsinline", ""); v.preload = "auto";
+    var hint = document.createElement("p"); hint.className = "vid-hint";
+    box.appendChild(v); box.appendChild(hint);
+    document.body.appendChild(box);
+    VID = { el: v, box: box, quiet: false };
+    var say = function () { hint.innerHTML = VID && VID.quiet ? "<b>OK</b> sound on &nbsp; <b>Back</b> close" : "<b>OK</b> or <b>Back</b> to close"; };
+    v.muted = S.video.sound === false;
+    v.onended = stopVideo;
+    v.onerror = function () { stopVideo(); if (asked) toast("The video did not play"); };
+    say();
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {
+      if (!VID || VID.el !== v) return;
+      // most TV browsers refuse sound until a button is pressed: start it silent and say how to hear it
+      VID.quiet = S.video.sound !== false; v.muted = true; say();
+      var q = v.play();
+      if (q && q.catch) q.catch(function () { stopVideo(); if (asked) toast("The video did not play"); });
+    });
+    videoSeen(true);
+    clearTimeout(restT); document.body.classList.remove("rest");
+    setTimeout(function () { if (box.parentNode) box.classList.add("on"); }, 30);
+  }
+  function stopVideo() {
+    if (!VID) return;
+    var v = VID.el, box = VID.box;
+    VID = null;
+    try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {}
+    if (box.parentNode) box.parentNode.removeChild(box);
+    awake();
+  }
+  function videoKey(k) {
+    if (k === "ok" && VID.quiet) {
+      VID.quiet = false; VID.el.muted = false;
+      VID.box.querySelector(".vid-hint").innerHTML = "<b>OK</b> or <b>Back</b> to close";
+      return;
+    }
+    if (k === "ok" || k === "back") stopVideo();
+  }
+  function autoVideo() {
+    if (!S.video || !S.video.url || QS.video === "0") return;
+    var every = S.video.every || "day";
+    if (QS.video === "1" || every === "always" || (every === "day" && !videoSeen())) playVideo(false);
+  }
+
   // ---------------------------------------------------------------- data
   function refreshState() {
     if (BRAND) api("tv/apps").then(function (r) { BRAND_APPS = r.apps || []; if (S && !sheet) drawApps(); }, function () {});
     return api("state").then(function (s) {
       if (s.error) { $("welcome").textContent = s.error; return; }
       var first = !S || S.id !== s.id;
+      var newVideo = s.video && s.video.id !== (S && S.video && S.video.id);
       S = s; HOME = s.id;
       if (first) buildScene();
       header();
       if (!sheet) drawCards();
       drawApps();
+      if (newVideo && !sheet) autoVideo();
     });
   }
   function refreshWeather() {
-    return fetch("/api/weather").then(function (r) { return r.json(); }).then(function (w) {
+    return fetch("/api/weather?home=" + encodeURIComponent(HOME)).then(function (r) { return r.json(); }).then(function (w) {
       WX = w; dateLine();
       if (S && !sheet) { drawCards(); drawApps(); }
     });
