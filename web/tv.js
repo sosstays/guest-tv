@@ -323,7 +323,7 @@
         var all = JSON.parse(TVOS.apps());
         list = all.filter(function (a) { return PREFER.indexOf(a.package) >= 0; })
           .sort(function (a, b) { return PREFER.indexOf(a.package) - PREFER.indexOf(b.package); })
-          .slice(0, 6).map(function (a) { return { name: a.label, pkg: a.package, banner: "http://tvos.invalid/banner/" + a.package }; });
+          .slice(0, 6).map(function (a) { return { name: a.label, pkg: a.package, banner: "//tvos.invalid/banner/" + a.package }; });   // banner has no scheme so it follows the page: an http image on the hosted https page is blocked
       } catch (e) { list = []; }
     } else {
       list = ["Netflix", "YouTube", "Prime Video", "Disney+", "Spotify"].map(function (n) { return { name: n }; });
