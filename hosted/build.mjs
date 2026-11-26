@@ -15,9 +15,20 @@ const homes = {};
 for (const id of (await readdir(join(root, "data", "homes"))).sort()) {
   const dir = join(root, "data", "homes", id);
   if (!existsSync(join(dir, "home.json"))) continue;
-  const home = await readJson(join(dir, "home.json"));
+  let home = await readJson(join(dir, "home.json"));
+  let guide = existsSync(join(dir, "guide.json")) ? await readJson(join(dir, "guide.json")) : {};
+  // "inherit": a room that shares its property's content (photos, weather, guide) and adds its own
+  // bits, for example "uplisting" and "video_home". Its own home.json and guide.json win.
+  if (home.inherit) {
+    const pdir = join(root, "data", "homes", home.inherit);
+    const parent = await readJson(join(pdir, "home.json"));
+    const pguide = existsSync(join(pdir, "guide.json")) ? await readJson(join(pdir, "guide.json")) : {};
+    home = { ...parent, ...home };
+    guide = { ...pguide, ...guide };
+    delete home.inherit;
+  }
   if (home.demo || !(home.sanity || {}).property) continue;   // the demo homes need the house computer's pretend devices
-  homes[id] = { home, guide: existsSync(join(dir, "guide.json")) ? await readJson(join(dir, "guide.json")) : {} };
+  homes[id] = { home, guide };
 }
 await writeFile(join(here, "lib", "homes.generated.mjs"),
   "// written by build.mjs from data/homes and data/settings.json\n" +

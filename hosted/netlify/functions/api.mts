@@ -6,6 +6,7 @@ import type { Config, Context } from "@netlify/functions";
 import QRCode from "qrcode";
 import { HOMES, SETTINGS } from "../../lib/homes.generated.mjs";
 import { PROPERTY, overlay, toHome } from "../../lib/sanity-map.mjs";
+import { currentBooking, fetchBookings, firstName, localNow } from "../../lib/uplisting.mjs";
 
 const API_VERSION = "2024-06-01";
 const TV_PROJECT = "p0aigdqj";   // Sanity project "Guest TV": tvHome and guestVideo documents
@@ -48,14 +49,17 @@ function todayIn(tz: string) {
   }
 }
 
-/** The welcome video for this home today: one made for the guest who is staying, else the default. */
-async function videoFor(id: string, today: string) {
+/**
+ * The welcome video for this home today: one made for the guest who is staying, else the default.
+ * `videoHome` is the home whose default video this one shows (a room shares its property's video).
+ */
+async function videoFor(id: string, videoHome: string, today: string) {
   const token = Netlify.env.get("SANITY_TV_READ_TOKEN") || undefined;
-  const r = await cached("tv:" + id + ":" + today, 60, () => groq(TV_PROJECT, TV_DATASET, `{
-    "home": *[_type == "tvHome" && homeId == $id][0]{videoSound, videoEvery, "video": defaultVideo.asset->{_id, url}},
+  const r = await cached("tv:" + id + ":" + videoHome + ":" + today, 60, () => groq(TV_PROJECT, TV_DATASET, `{
+    "home": *[_type == "tvHome" && homeId == $videoHome][0]{videoSound, videoEvery, "video": defaultVideo.asset->{_id, url}},
     "guest": *[_type == "guestVideo" && home->homeId == $id && from <= $today && to >= $today] | order(from desc)[0]{
       guestName, from, to, message, "video": video.asset->{_id, url}}
-  }`, { id, today }, token), null as any);
+  }`, { id, videoHome, today }, token), null as any);
   const home = (r && r.home) || {}, guest = (r && r.guest) || null;
   const asset = (guest && guest.video) || home.video;
   return {
@@ -65,6 +69,24 @@ async function videoFor(id: string, today: string) {
       sound: home.videoSound !== false, every: home.videoEvery || "day",
     } : null,
   };
+}
+
+/**
+ * First name of whoever is staying in this room now, from Uplisting ("uplisting": {"property": <id>}
+ * in home.json), or "". Needs UPLISTING_API_KEY in Netlify. Any failure gives "" (the generic welcome)
+ * and the last good answer is kept for 10 minutes, so Uplisting being down never blanks the screen.
+ */
+async function uplistingGuest(home: Json, tz: string): Promise<string> {
+  const prop = home.uplisting && home.uplisting.property;
+  const key = Netlify.env.get("UPLISTING_API_KEY");
+  if (!prop || !key) return "";
+  const { date, time } = localNow(tz);
+  const b = await cached("up:" + prop + ":" + date, 600, async () => {
+    const { bookings } = await fetchBookings(prop, key, date);
+    return bookings;
+  }, [] as any[]);
+  const cur = currentBooking(b, date, time, home.uplisting.departure || "11:00");
+  return cur ? firstName(cur.guest_name) : "";
 }
 
 async function state(id: string, origin: string) {
@@ -79,11 +101,13 @@ async function state(id: string, origin: string) {
   }, null as any);
   const { home: h, guide: g } = overlay(base.home, base.guide || {}, mapped);
   const tz = (h.weather || {}).tz || ((SETTINGS as Json).weather || {}).tz || "UTC";
-  const tv = await videoFor(id, todayIn(tz));
+  const tv = await videoFor(id, h.video_home || id, todayIn(tz));
   const guestRoom = h.mode === "guest";
-  // No booking feed here yet: the welcome, Wi-Fi and guide always show ("stay_open" in home.json).
-  // A guest welcome in Sanity adds the guest's first name for their dates.
-  const stay = { phase: "open", guest: (tv.guest && tv.guest.guestName) || "", active: true };
+  // The welcome, Wi-Fi and guide always show ("stay_open" in home.json). The guest's first name comes
+  // from a Guest welcome in Sanity for their dates, else from the booking in Uplisting (if this home
+  // names an Uplisting property).
+  const booked = (tv.guest && tv.guest.guestName) ? "" : await uplistingGuest(h, tz);
+  const stay = { phase: "open", guest: (tv.guest && tv.guest.guestName) || booked, active: true };
   return {
     id, mode: h.mode || "stay", demo: false, name: h.name, kind: h.kind, host: h.host,
     photos: h.photos || {}, scene: h.scene || {}, stay, checkin: h.checkin, checkout_time: h.checkout,
@@ -93,7 +117,9 @@ async function state(id: string, origin: string) {
     checkout: guestRoom ? {} : g.checkout || {}, emergency: g.emergency || [], notes: h.notes || [],
     phone_url: `${origin}/p/?home=${id}`, address: h.address, whatsapp: h.whatsapp,
     brand, has_climate: false, remote_url: null, video: tv.video, hosted: true,
-    homes: Object.entries(HOMES as Json).map(([i, x]: [string, any]) => ({ id: i, name: x.home.name || i })),
+    // a room that shows a guest's name keeps its unguessable address out of this list
+    homes: Object.entries(HOMES as Json).filter(([, x]: [string, any]) => !x.home.uplisting)
+      .map(([i, x]: [string, any]) => ({ id: i, name: x.home.name || i })),
   };
 }
 
@@ -141,7 +167,20 @@ export default async (req: Request, _context: Context) => {
     try {
       await groq(TV_PROJECT, TV_DATASET, 'count(*[_type == "tvHome"])', {}, Netlify.env.get("SANITY_TV_READ_TOKEN") || undefined);
     } catch (e) { tv = String(e); }
-    return json({ ok: tv === "ok", hosted: true, token: !!Netlify.env.get("SANITY_TV_READ_TOKEN"), guest_tv: tv });
+    // Uplisting: says whether the key works and which route answered, never the key or any guest
+    let uplisting = "not used";
+    const withUp = Object.values(HOMES as Json).find((x: any) => x.home.uplisting && x.home.uplisting.property);
+    if (withUp) {
+      const key = Netlify.env.get("UPLISTING_API_KEY");
+      if (!key) uplisting = "no key set";
+      else {
+        try {
+          const r = await fetchBookings(withUp.home.uplisting.property, key, localNow("Europe/Dublin").date);
+          uplisting = "ok (" + r.route + " route)";
+        } catch (e) { uplisting = String(e); }
+      }
+    }
+    return json({ ok: tv === "ok", hosted: true, token: !!Netlify.env.get("SANITY_TV_READ_TOKEN"), guest_tv: tv, uplisting });
   }
   if (path === "/api/log") {   // the TV page reports its own script errors here (TVs have no console to look at)
     if (req.method === "POST") console.log("tv page:", (await req.text()).slice(0, 600));
