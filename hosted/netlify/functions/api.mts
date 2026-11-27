@@ -176,7 +176,9 @@ export default async (req: Request, _context: Context) => {
       else {
         try {
           const r = await fetchBookings(withUp.home.uplisting.property, key, localNow("Europe/Dublin").date);
-          uplisting = "ok (" + r.route + " route)";
+          // field NAMES of the first booking (never values), so a format surprise can be seen from here
+          const first = (r.bookings[0] && (r.bookings[0].attributes || r.bookings[0])) || {};
+          uplisting = "ok (" + r.route + " route; fields: " + Object.keys(first).slice(0, 30).join(",") + ")";
         } catch (e) { uplisting = String(e); }
       }
     }

@@ -65,9 +65,9 @@ const fake = (answers) => async (url, init) => {
 await (async () => {
   calls.length = 0;
   const r = await fetchBookings(1, "secret-key", "2026-12-08", fake([{ s: 404 }, { s: 200, body: { data: [{}] } }]));
-  assert.equal(r.route, "list");
+  assert.equal(r.route, "oauth");
   assert.ok(calls.every((c) => c.method === "GET"));
-  assert.ok(calls[0].url.includes("/properties/1/bookings"));
+  assert.ok(calls[0].url.includes("/bookings/1?from=2026-10-09&to=2026-12-09"));
   assert.equal(calls[0].auth, "Basic " + btoa("secret-key"));
   n++; console.log("ok fetch: falls back, GET only, Basic auth");
   await assert.rejects(fetchBookings(1, "secret-key", "2026-12-08", fake([{ s: 401 }])), (e) => /refused/.test(e.message) && !/secret-key/.test(e.message));

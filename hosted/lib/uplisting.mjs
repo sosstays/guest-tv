@@ -2,9 +2,10 @@
 // but a GET, and only the guest's FIRST NAME leaves this file.
 //
 // Uplisting's API is at https://connect.uplisting.io, with HTTP Basic auth: the API key from
-// Uplisting's Connect page, base64 encoded. The exact bookings route is not published for this
-// account, so fetchBookings tries the property route (the one Uplisting's own connector uses) first
-// and then the plain /bookings list, and says which one answered (see /api/health).
+// Uplisting's Connect page, base64 encoded. A host's API key lists a property's bookings at
+//   GET /bookings/<property id>?from=YYYY-MM-DD&to=YYYY-MM-DD      (Uplisting's "API key" collection)
+// The newer OAuth API (a bearer token, not a key) uses GET /bookings?property_id=<id> instead; it is
+// kept as a fallback. /api/health says which one answered.
 
 export const UPLISTING_BASE = "https://connect.uplisting.io";
 
@@ -62,11 +63,11 @@ function addDays(date, n) {
 
 /** GET only. Returns { bookings, route }. Throws with a short reason (never the key). */
 export async function fetchBookings(propertyId, apiKey, today, fetchImpl = fetch) {
-  const from = addDays(today, -60), to = today;   // a stay that began in the last 60 days and is still on
+  const from = addDays(today, -60), to = addDays(today, 1);   // a stay that began in the last 60 days and is still on
   const auth = { Authorization: "Basic " + btoa(apiKey), Accept: "application/json" };
   const routes = [
-    ["property", `${UPLISTING_BASE}/properties/${encodeURIComponent(propertyId)}/bookings?` + new URLSearchParams({ from, to })],
-    ["list", `${UPLISTING_BASE}/bookings?` + new URLSearchParams({ property_id: String(propertyId), check_in_from: from, check_in_to: to })],
+    ["key", `${UPLISTING_BASE}/bookings/${encodeURIComponent(propertyId)}?` + new URLSearchParams({ from, to, per_page: "50" })],
+    ["oauth", `${UPLISTING_BASE}/bookings?` + new URLSearchParams({ property_id: String(propertyId), from, to })],
   ];
   let why = "";
   for (const [route, url] of routes) {
@@ -75,7 +76,7 @@ export async function fetchBookings(propertyId, apiKey, today, fetchImpl = fetch
     if (r.status === 429) throw new Error("Uplisting says slow down (429)");
     if (!r.ok) { why = `${route} route ${r.status}`; continue; }
     const body = await r.json();
-    const list = Array.isArray(body) ? body : body.data;
+    const list = Array.isArray(body) ? body : (body.data || body.bookings);
     if (!Array.isArray(list)) { why = `${route} route: unexpected answer`; continue; }
     return { bookings: list, route };
   }
