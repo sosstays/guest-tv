@@ -31,7 +31,10 @@ const list = [
 ok("who is on now", () => {
   assert.equal(currentBooking(list, "2026-11-26", "10:00"), null);                 // nobody today
   assert.equal(currentBooking(list, "2026-12-07", "20:00"), null);                 // day before check-in
-  assert.equal(currentBooking(list, "2026-12-08", "00:30").guest_name, "Future Guest");   // from check-in day
+  assert.equal(currentBooking(list, "2026-12-08", "00:30"), null);                 // check-in day, before 15:00
+  assert.equal(currentBooking(list, "2026-12-08", "14:59"), null);
+  assert.equal(currentBooking(list, "2026-12-08", "15:00").guest_name, "Future Guest");   // from check-in time
+  assert.equal(currentBooking(list, "2026-12-09", "03:00").guest_name, "Future Guest");   // later days: all day
   assert.equal(currentBooking(list, "2026-12-16", "23:00").guest_name, "Future Guest");   // last night
   assert.equal(currentBooking(list, "2026-12-17", "10:59").guest_name, "Future Guest");   // check-out morning
   assert.equal(currentBooking(list, "2026-12-17", "11:00"), null);                 // after departure time
@@ -44,10 +47,14 @@ ok("cancelled and odd statuses never count", () => {
 ok("same-day turnover: the leaver keeps the screen until departure", () => {
   const t = [bk("Leaving", "2026-12-01", "2026-12-05"), bk("Arriving", "2026-12-05", "2026-12-07")];
   assert.equal(currentBooking(t, "2026-12-05", "09:00").guest_name, "Leaving");   // before 11:00 the leaver is still here
+  assert.equal(currentBooking(t, "2026-12-05", "12:00"), null);                      // gap between 11:00 and 15:00
   assert.equal(currentBooking(t, "2026-12-05", "15:30").guest_name, "Arriving");
 });
 ok("flat (non JSON:API) bookings work too", () => {
   assert.equal(currentBooking([{ guest_name: "Flat", check_in: "2026-12-01", check_out: "2026-12-03" }], "2026-12-02", "12:00").guest_name, "Flat");
+  // the booking's own arrival time wins over the default
+  assert.equal(currentBooking([{ guest_name: "Late", check_in: "2026-12-01", check_out: "2026-12-03", arrival_time: "17:00:00" }], "2026-12-01", "16:00"), null);
+  assert.equal(currentBooking([{ guest_name: "Late", check_in: "2026-12-01", check_out: "2026-12-03", arrival_time: "17:00:00" }], "2026-12-01", "17:00").guest_name, "Late");
 });
 ok("local time in Dublin", () => {
   const w = localNow("Europe/Dublin", new Date("2026-07-01T23:30:00Z"));   // summer: UTC+1

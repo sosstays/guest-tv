@@ -76,17 +76,18 @@ async function videoFor(id: string, videoHome: string, today: string) {
  * in home.json), or "". Needs UPLISTING_API_KEY in Netlify. Any failure gives "" (the generic welcome)
  * and the last good answer is kept for 10 minutes, so Uplisting being down never blanks the screen.
  */
-async function uplistingGuest(home: Json, tz: string): Promise<string> {
+async function uplistingGuest(home: Json, tz: string): Promise<{ name: string; since: string }> {
+  const none = { name: "", since: "" };
   const prop = home.uplisting && home.uplisting.property;
   const key = Netlify.env.get("UPLISTING_API_KEY");
-  if (!prop || !key) return "";
+  if (!prop || !key) return none;
   const { date, time } = localNow(tz);
   const b = await cached("up:" + prop + ":" + date, 600, async () => {
     const { bookings } = await fetchBookings(prop, key, date);
     return bookings;
   }, [] as any[]);
-  const cur = currentBooking(b, date, time, home.uplisting.departure || "11:00");
-  return cur ? firstName(cur.guest_name) : "";
+  const cur = currentBooking(b, date, time, home.uplisting.departure || "11:00", home.uplisting.arrival || "15:00");
+  return cur ? { name: firstName(cur.guest_name), since: cur.check_in } : none;
 }
 
 async function state(id: string, origin: string) {
@@ -106,8 +107,10 @@ async function state(id: string, origin: string) {
   // The welcome, Wi-Fi and guide always show ("stay_open" in home.json). The guest's first name comes
   // from a Guest welcome in Sanity for their dates, else from the booking in Uplisting (if this home
   // names an Uplisting property).
-  const booked = (tv.guest && tv.guest.guestName) ? "" : await uplistingGuest(h, tz);
-  const stay = { phase: "open", guest: (tv.guest && tv.guest.guestName) || booked, active: true };
+  const booked = (tv.guest && tv.guest.guestName) ? { name: "", since: "" } : await uplistingGuest(h, tz);
+  // "since" is when this stay began: the page plays the welcome video once per stay
+  const stay = { phase: "open", guest: (tv.guest && tv.guest.guestName) || booked.name, active: true,
+    since: (tv.guest && tv.guest.guestName ? tv.guest.from : booked.since) || "" };
   return {
     id, mode: h.mode || "stay", demo: false, name: h.name, kind: h.kind, host: h.host,
     photos: h.photos || {}, scene: h.scene || {}, stay, checkin: h.checkin, checkout_time: h.checkout,

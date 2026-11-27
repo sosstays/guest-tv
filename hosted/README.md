@@ -23,10 +23,20 @@ a minute for videos and five minutes for property content.
   goes in the greeting, and its message replaces the welcome words.
 - It plays full screen. **OK** or **Back** closes it. A **Welcome video** button on the home plays
   it again.
-- "How often it plays by itself" on the home: once a day, every time the TV comes on, or never.
+- "How often it plays by itself" on the home: the setting called "day" now means **once per stay** (when a booking
+  is known; once a day on that TV otherwise), "always" every time the TV comes on, or "never". **OK** or **Back**
+  skips it. It plays only when a video file is uploaded.
 - TV browsers often refuse sound until a button is pressed. Then it starts silent and says
   "OK sound on".
 - Add `?video=1` to the address to play it now, `?video=0` to keep it quiet (for testing).
+
+## Guest names from Uplisting
+
+A home that names an Uplisting property in `home.json` (`"uplisting": {"property": <id>}`, optional
+`"arrival": "15:00"` and `"departure": "11:00"`) shows the guest's **first name** while a booking is on: from
+check-in time on arrival day until check-out time. It needs `UPLISTING_API_KEY` (a secret) in Netlify.
+`/api/health` says whether the key works. A Guest welcome in Sanity for the same dates wins. A room can reuse
+its property's content with `"inherit": "<home id>"` and its default video with `"video_home": "<home id>"`.
 
 ## What is not here
 

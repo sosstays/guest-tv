@@ -711,11 +711,12 @@
 
   // ---------------------------------------------------------------- welcome video
   // S.video = {url, id, sound, every}: the host's default video for this home, or one made for this
-  // guest. It plays full screen over the home. OK or Back closes it. "every" says when it starts by
-  // itself: "day" (once a day on this TV), "always" (each time the page loads) or "never".
+  // guest. It plays full screen over the home. OK or Back skips it. "every" says when it starts by
+  // itself: "day" (once per stay when a booking is known, else once a day on this TV), "always" (each
+  // time the page loads) or "never".
   var VID = null;   // {el, box, quiet}: quiet when the TV would not start it with sound
   function videoSeen(set) {
-    var key = "guest-tv-video", val = S.video.id + "|" + isoToday();
+    var key = "guest-tv-video", val = S.video.id + "|" + ((S.stay && S.stay.since) || isoToday());   // one play per stay
     try {
       if (set) localStorage.setItem(key, val);
       return localStorage.getItem(key) === val;
@@ -730,7 +731,7 @@
     box.appendChild(v); box.appendChild(hint);
     document.body.appendChild(box);
     VID = { el: v, box: box, quiet: false };
-    var say = function () { hint.innerHTML = VID && VID.quiet ? "<b>OK</b> sound on &nbsp; <b>Back</b> close" : "<b>OK</b> or <b>Back</b> to close"; };
+    var say = function () { hint.innerHTML = VID && VID.quiet ? "<b>OK</b> sound on &nbsp; <b>Back</b> skip" : "<b>OK</b> or <b>Back</b> to skip"; };
     v.muted = S.video.sound === false;
     v.onended = stopVideo;
     v.onerror = function () { stopVideo(); if (asked) toast("The video did not play"); };
@@ -758,7 +759,7 @@
   function videoKey(k) {
     if (k === "ok" && VID.quiet) {
       VID.quiet = false; VID.el.muted = false;
-      VID.box.querySelector(".vid-hint").innerHTML = "<b>OK</b> or <b>Back</b> to close";
+      VID.box.querySelector(".vid-hint").innerHTML = "<b>OK</b> or <b>Back</b> to skip";
       return;
     }
     if (k === "ok" || k === "back") stopVideo();
@@ -776,12 +777,13 @@
       if (s.error) { $("welcome").textContent = s.error; return; }
       var first = !S || S.id !== s.id;
       var newVideo = s.video && s.video.id !== (S && S.video && S.video.id);
+      var newStay = !!(S && s.stay && s.stay.since && s.stay.since !== (S.stay && S.stay.since));   // a new guest's stay began while the TV was on
       S = s; HOME = s.id;
       if (first) buildScene();
       header();
       if (!sheet) drawCards();
       drawApps();
-      if (newVideo && !sheet) autoVideo();
+      if ((newVideo || newStay) && !sheet) autoVideo();
     });
   }
   function refreshWeather() {

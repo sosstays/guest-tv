@@ -37,14 +37,16 @@ export function localNow(tz, now = new Date()) {
 }
 
 /**
- * The booking that is on now: not cancelled, checked in on or before today, and either leaving after
- * today or leaving today but not yet past its departure time. On a same-day turnover the guest still
- * leaving keeps the screen until their departure time, then the arriving guest has it.
+ * The booking that is on now: not cancelled, past its check-in time (15:00 on arrival day), and either
+ * leaving after today or leaving today but not yet past its departure time. On a same-day turnover the
+ * guest still leaving keeps the screen until their departure time; then nobody until the arriving
+ * guest's check-in time.
  */
-export function currentBooking(bookings, today, time, defaultDeparture = "11:00") {
+export function currentBooking(bookings, today, time, defaultDeparture = "11:00", defaultArrival = "15:00") {
   const on = (bookings || []).map((b) => b.attributes || b).filter((b) => {
     if (!b || !b.check_in || !b.check_out || b.cancelled_dt || NOT_STAYING.test(String(b.status || ""))) return false;
     if (b.check_in > today) return false;
+    if (b.check_in === today && time < String(b.arrival_time || defaultArrival).slice(0, 5)) return false;   // not before check-in time
     if (b.check_out > today) return true;
     return b.check_out === today && time < String(b.departure_time || defaultDeparture).slice(0, 5);
   });
