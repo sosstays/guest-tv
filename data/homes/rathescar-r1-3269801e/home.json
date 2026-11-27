@@ -1,0 +1,7 @@
+{
+  "id": "rathescar-r1-3269801e",
+  "inherit": "rathescar-grove",
+  "room": "Room 1",
+  "video_home": "rathescar-grove",
+  "uplisting": { "property": 266874, "departure": "11:00" }
+}
