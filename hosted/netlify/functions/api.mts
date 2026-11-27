@@ -165,7 +165,12 @@ export default async (req: Request, _context: Context) => {
   const path = url.pathname.replace(/\/+$/, "");
   const id = url.searchParams.get("home") || (SETTINGS as Json).default_home;
 
-  if (path === "/api/health") {   // is the Guest TV project readable from here? (says yes or why not, never the token)
+  // The couch-tv app on the TV calls /api/health when it wakes, with a 1.5 s timeout, and shows its own
+  // built-in home (and tries again a minute later) if that is slow. So the plain address must answer at
+  // once, with no outbound call (and the site serves it as a static file, see build.mjs). The real
+  // checks are at /api/diag.
+  if (path === "/api/health") return json({ ok: true, hosted: true });
+  if (path === "/api/diag") {   // is the Guest TV project readable from here? (says yes or why not, never the token)
     let tv = "ok";
     try {
       await groq(TV_PROJECT, TV_DATASET, 'count(*[_type == "tvHome"])', {}, Netlify.env.get("SANITY_TV_READ_TOKEN") || undefined);

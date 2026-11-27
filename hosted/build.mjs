@@ -57,8 +57,11 @@ for (const f of await readdir(join(web, "homes"))) {
     await cp(join(web, "homes", f), join(dist, "p", "homes", f));
   }
 }
+// /api/health is a static file, so the couch-tv app on the TV (1.5 s timeout) never waits for a function
+await writeFile(join(dist, "health.json"), JSON.stringify({ ok: true, hosted: true }) + "\n");
 // /<home id> opens that home's TV screen
-await writeFile(join(dist, "_redirects"), Object.keys(homes).map((id) => `/${id}  /tv/?home=${id}  302`).join("\n") + "\n");
+await writeFile(join(dist, "_redirects"), "/api/health  /health.json  200!\n" +
+  Object.keys(homes).map((id) => `/${id}  /tv/?home=${id}  302`).join("\n") + "\n");
 
 // .deploy/: everything Netlify needs and nothing else (no data/private.json, no Python), ready to upload.
 // Netlify installs the function's packages itself and has nothing to build.

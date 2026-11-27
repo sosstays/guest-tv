@@ -35,7 +35,7 @@ a minute for videos and five minutes for property content.
 A home that names an Uplisting property in `home.json` (`"uplisting": {"property": <id>}`, optional
 `"arrival": "15:00"` and `"departure": "11:00"`) shows the guest's **first name** while a booking is on: from
 check-in time on arrival day until check-out time. It needs `UPLISTING_API_KEY` (a secret) in Netlify.
-`/api/health` says whether the key works. A Guest welcome in Sanity for the same dates wins. A room can reuse
+`/api/diag` says whether the key works. A Guest welcome in Sanity for the same dates wins. A room can reuse
 its property's content with `"inherit": "<home id>"` and its default video with `"video_home": "<home id>"`.
 
 ## What is not here
@@ -57,7 +57,7 @@ node test.mjs parity.json      # the JavaScript mapping against sanity_sync.py (
 Deploy by uploading `.deploy/` to the Netlify project `sos-guest-tv`. `.deploy/` holds only public
 files: no `data/private.json`, no Wi-Fi password (that is read from Sanity when the page asks).
 The function needs one environment variable in Netlify, `SANITY_TV_READ_TOKEN` (a read token for
-the Guest TV project). `/api/health` says whether it can read that project.
+the Guest TV project). `/api/diag` says whether it can read that project and whether the Uplisting key works. `/api/health` is a static file on purpose: the couch-tv app on the TV calls it with a 1.5 s timeout and shows its own home screen if it is slow.
 
 A new home: add `data/homes/<id>/` with a `home.json` that names its Concierge property, add a
 **TV home** in the Studio with the same home id, build and deploy.
