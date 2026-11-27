@@ -671,6 +671,20 @@
     e.preventDefault();
     onKey(k);
   });
+  // Owner shortcut: hold BACK for 8 seconds to open the TV's own Settings (the IP address, HDMI-CEC,
+  // debugging). The Home key never reaches a web page, but the couch-tv app tells the page about a
+  // held BACK. Nothing shows while holding, so a guest who presses Back never notices it.
+  var backSince = 0, backLast = 0;
+  window.CouchDesign = window.CouchDesign || {};
+  window.CouchDesign.backHeld = function () {
+    var now = Date.now();
+    if (now - backLast > 1500) backSince = now;   // a new hold starts again from zero
+    backLast = now;
+    if (now - backSince >= 8000 && TVOS && TVOS.openSettings) {
+      backSince = now + 60000;   // once per hold
+      try { TVOS.openSettings(); } catch (err) {}
+    }
+  };
   // the Samsung and LG app passes on keys that reached it instead of this page
   window.addEventListener("message", function (e) {
     var k = e.source === window.parent && e.data && e.data.guestKey;
@@ -841,7 +855,8 @@
   setInterval(clock, 1000);
   setInterval(refreshState, 60000);
   setInterval(refreshWeather, 30 * 60000);
-  setInterval(function () { refreshAircon(); refreshHub(); }, 20000);
+  // the hosted site has no aircon and no hub, so asking every 20 s only costs Netlify calls
+  setInterval(function () { if (S && S.hosted) return; refreshAircon(); refreshHub(); }, 20000);
   if (document.fonts) document.fonts.load("300 10px Antonio").then(function () { glassShown = ""; clock(); });
   window.addEventListener("resize", function () { glassShown = ""; clock(); });
 })();
